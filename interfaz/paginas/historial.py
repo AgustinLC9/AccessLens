@@ -1,5 +1,5 @@
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Signal, Qt
 
 from PySide6.QtWidgets import (
     QWidget,
@@ -69,9 +69,20 @@ class PaginaHistorial(QWidget):
             QTableWidget.SelectionMode.SingleSelection
         )
 
-        self.tabla.horizontalHeader().setSectionResizeMode(
+        self.tabla.setAlternatingRowColors(True)
+        self.tabla.setShowGrid(False)
+        self.tabla.verticalHeader().setVisible(False)
+
+        encabezado = self.tabla.horizontalHeader()
+        encabezado.setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
         )
+        encabezado.setDefaultAlignment(
+            Qt.AlignmentFlag.AlignLeft |
+            Qt.AlignmentFlag.AlignVCenter
+        )
+
+        self.tabla.setMinimumHeight(300)
 
         self.tabla.doubleClicked.connect(
             self.abrir_informe
@@ -80,10 +91,12 @@ class PaginaHistorial(QWidget):
         layout.addWidget(self.tabla)
 
         botones = QHBoxLayout()
+        botones.setSpacing(10)
 
         self.boton_actualizar = QPushButton(
             "Actualizar historial"
         )
+        self.boton_actualizar.setObjectName("boton_secundario")
 
         self.boton_actualizar.clicked.connect(
             self.cargar_historial
@@ -96,6 +109,7 @@ class PaginaHistorial(QWidget):
         self.boton_ver_informe = QPushButton(
             "Ver informe"
         )
+        self.boton_ver_informe.setObjectName("boton_principal")
 
         self.boton_ver_informe.clicked.connect(
             self.abrir_informe
@@ -105,12 +119,89 @@ class PaginaHistorial(QWidget):
 
         layout.addLayout(botones)
 
+        self.aplicar_estilos()
+
+    def aplicar_estilos(self):
+
+        self.setStyleSheet("""
+            QLabel {
+                color: #E2E8F0;
+            }
+
+            QTableWidget {
+                background-color: #141B24;
+                alternate-background-color: #18222D;
+                color: #E2E8F0;
+                border: 1px solid #263442;
+                border-radius: 10px;
+                padding: 8px;
+                selection-background-color: #294052;
+                selection-color: #FFFFFF;
+                outline: none;
+            }
+
+            QTableWidget::item {
+                padding: 12px 8px;
+                border: none;
+            }
+
+            QTableWidget::item:selected {
+                background-color: #294052;
+                color: #FFFFFF;
+            }
+
+            QHeaderView::section {
+                background-color: #1C2936;
+                color: #94A3B8;
+                padding: 13px 8px;
+                border: none;
+                border-bottom: 1px solid #334155;
+                font-weight: bold;
+            }
+
+            QPushButton {
+                padding: 11px 18px;
+                border-radius: 7px;
+                font-weight: bold;
+            }
+
+            QPushButton#boton_principal {
+                background-color: #6D91A8;
+                color: #0B0F14;
+                border: none;
+            }
+
+            QPushButton#boton_principal:hover {
+                background-color: #8EADC1;
+            }
+
+            QPushButton#boton_principal:pressed {
+                background-color: #52758C;
+            }
+
+            QPushButton#boton_secundario {
+                background-color: #1C2936;
+                color: #E2E8F0;
+                border: 1px solid #334155;
+            }
+
+            QPushButton#boton_secundario:hover {
+                background-color: #263747;
+                border: 1px solid #6D91A8;
+            }
+
+            QPushButton#boton_secundario:pressed {
+                background-color: #111B25;
+            }
+        """)
+
     def cargar_historial(self):
 
         try:
 
             analisis = self.repositorio.listar_analisis()
 
+            self.tabla.clearSpans()
             self.tabla.setRowCount(0)
 
             for registro in analisis:
@@ -130,6 +221,7 @@ class PaginaHistorial(QWidget):
                     "completado": "Completado",
                     "completado_parcial": "Completado parcialmente",
                     "fallido": "Fallido",
+                    "cancelado": "Cancelado",
                     "en_ejecucion": "En ejecución",
                     "pendiente": "Pendiente"
                 }
@@ -158,6 +250,11 @@ class PaginaHistorial(QWidget):
 
                     elemento = QTableWidgetItem(str(valor))
 
+                    if columna == 0:
+                        elemento.setTextAlignment(
+                            Qt.AlignmentFlag.AlignCenter
+                        )
+
                     self.tabla.setItem(
                         fila,
                         columna,
@@ -170,6 +267,10 @@ class PaginaHistorial(QWidget):
 
                 elemento = QTableWidgetItem(
                     "Todavía no hay análisis registrados."
+                )
+
+                elemento.setTextAlignment(
+                    Qt.AlignmentFlag.AlignCenter
                 )
 
                 self.tabla.setItem(0, 0, elemento)

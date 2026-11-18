@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QPushButton
 )
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Signal, Qt
 
 from ia.conocimiento import obtener_nombre_regla
 
@@ -45,35 +45,57 @@ class PaginaAnalisis(QWidget):
         layout.addWidget(titulo)
         layout.addWidget(descripcion)
 
+        # Panel principal
         panel = QFrame()
         panel.setObjectName("panel")
 
         layout_panel = QVBoxLayout(panel)
+        layout_panel.setContentsMargins(24, 24, 24, 24)
+        layout_panel.setSpacing(14)
 
         subtitulo = QLabel("Sitios analizados")
         subtitulo.setObjectName("subtitulo")
 
         self.lista_urls = QListWidget()
+        self.lista_urls.setObjectName("lista_urls")
 
         for url in self.urls:
             self.estados_urls[url] = "En espera"
             self.lista_urls.addItem(f"En espera - {url}")
 
         self.progreso = QProgressBar()
+        self.progreso.setObjectName("progreso")
         self.progreso.setRange(0, 100)
         self.progreso.setValue(0)
 
         self.estado = QLabel("Preparando análisis...")
+        self.estado.setObjectName("descripcion")
+        self.estado.setWordWrap(True)
 
-        self.resumen_general = QLabel(
+        # Resumen general
+        self.resumen_general = QPlainTextEdit()
+        self.resumen_general.setObjectName("resumen_general")
+        self.resumen_general.setPlainText(
             "El resumen general aparecerá al finalizar el análisis."
         )
-
-        self.resumen_general.setObjectName("descripcion")
-        self.resumen_general.setWordWrap(True)
-        self.estado.setObjectName("descripcion")
+        self.resumen_general.setReadOnly(True)
+        self.resumen_general.setLineWrapMode(
+            QPlainTextEdit.LineWrapMode.WidgetWidth
+        )
+        self.resumen_general.setMinimumHeight(240)
+        self.resumen_general.setMaximumHeight(260)
+        self.resumen_general.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.resumen_general.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
 
         self.boton_cancelar = QPushButton("Cancelar análisis")
+        self.boton_cancelar.setObjectName("boton_cancelar")
+        self.boton_cancelar.setCursor(
+            Qt.CursorShape.PointingHandCursor
+        )
         self.boton_cancelar.clicked.connect(
             self.solicitar_cancelacion
         )
@@ -88,13 +110,13 @@ class PaginaAnalisis(QWidget):
         layout.addWidget(panel)
 
         # Área desplazable para los informes individuales
-
         self.informes_scroll = QScrollArea()
         self.informes_scroll.setWidgetResizable(True)
-        self.informes_scroll.setObjectName("panel")
+        self.informes_scroll.setObjectName("informes_scroll")
         self.informes_scroll.setMinimumHeight(300)
 
         self.contenedor_informes = QWidget()
+        self.contenedor_informes.setObjectName("contenedor_informes")
 
         self.layout_informes = QVBoxLayout(
             self.contenedor_informes
@@ -109,6 +131,174 @@ class PaginaAnalisis(QWidget):
         self.informes_scroll.hide()
 
         layout.addWidget(self.informes_scroll, 1)
+
+        self.aplicar_estilos()
+
+    def aplicar_estilos(self):
+
+        self.setStyleSheet("""
+            #titulo_pagina {
+                color: #E2E8F0;
+                font-size: 28px;
+                font-weight: bold;
+            }
+
+            #descripcion {
+                color: #94A3B8;
+                font-size: 13px;
+                font-weight: normal;
+            }
+
+            #panel {
+                background-color: #141B24;
+                border: 1px solid #263442;
+                border-radius: 12px;
+            }
+
+            QLabel#subtitulo {
+                color: #D5E2EC;
+                font-size: 14px;
+                font-weight: bold;
+            }
+
+            #lista_urls {
+                background-color: #0B0F14;
+                color: #CBD5E1;
+                border: 1px solid #334155;
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 12px;
+            }
+
+            #lista_urls::item {
+                padding: 7px;
+                border-radius: 5px;
+            }
+
+            #lista_urls::item:selected {
+                background-color: #263B4B;
+                color: #E2E8F0;
+            }
+
+            #progreso {
+                background-color: #0B0F14;
+                border: none;
+                border-radius: 5px;
+                height: 10px;
+                text-align: center;
+            }
+
+            #progreso::chunk {
+                background-color: #6D91A8;
+                border-radius: 5px;
+            }
+
+            QPlainTextEdit#resumen_general {
+                background-color: #1C2936;
+                color: #D7E2EA;
+                border: none;
+                border-radius: 8px;
+                padding: 14px;
+                font-size: 13px;
+                font-weight: normal;
+            }
+
+            #boton_cancelar {
+                background-color: #263B4B;
+                color: #C7D7E2;
+                border: 1px solid #3D596D;
+                border-radius: 8px;
+                padding: 11px;
+                font-size: 13px;
+                font-weight: bold;
+            }
+
+            #boton_cancelar:hover {
+                background-color: #344F62;
+            }
+
+            #boton_cancelar:disabled {
+                background-color: #1C2936;
+                color: #64748B;
+            }
+
+            #informes_scroll {
+                background-color: transparent;
+                border: none;
+            }
+
+            #contenedor_informes {
+                background-color: transparent;
+            }
+
+            #tarjeta_informe {
+                background-color: #141B24;
+                border: 1px solid #263442;
+                border-radius: 12px;
+            }
+
+            #titulo_tarjeta {
+                color: #E2E8F0;
+                font-size: 19px;
+                font-weight: bold;
+            }
+
+            #puntaje {
+                color: #8EADC1;
+                font-size: 14px;
+                font-weight: bold;
+            }
+
+            QLabel#texto_problema {
+                color: #E2E8F0;
+                font-size: 13px;
+                font-weight: normal;
+            }
+
+            QLabel#texto_recomendacion {
+                color: #CBD5E1;
+                font-size: 13px;
+                font-weight: normal;
+            }
+
+            #separador {
+                background-color: #263442;
+                border: none;
+                max-height: 1px;
+            }
+
+            QPlainTextEdit {
+                background-color: #0B0F14;
+                color: #D7E2EA;
+                border: 1px solid #334155;
+                border-radius: 7px;
+                padding: 10px;
+                font-family: Consolas;
+                font-size: 12px;
+            }
+
+            QScrollBar:vertical {
+                background-color: #0B0F14;
+                width: 9px;
+                margin: 0;
+                border-radius: 4px;
+            }
+
+            QScrollBar::handle:vertical {
+                background-color: #40596B;
+                border-radius: 4px;
+                min-height: 25px;
+            }
+
+            QScrollBar::handle:vertical:hover {
+                background-color: #6D91A8;
+            }
+
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {
+                height: 0;
+            }
+        """)
 
     def solicitar_cancelacion(self):
 
@@ -198,7 +388,6 @@ class PaginaAnalisis(QWidget):
         }
 
         # Limpiar informes anteriores
-
         while self.layout_informes.count():
 
             elemento = self.layout_informes.takeAt(0)
@@ -208,7 +397,6 @@ class PaginaAnalisis(QWidget):
                 widget.deleteLater()
 
         # Procesar resultados de cada página
-
         for pagina in paginas:
 
             url = pagina["url"]
@@ -301,10 +489,9 @@ class PaginaAnalisis(QWidget):
             f"Menores: {severidades['minor']}"
         )
 
-        self.resumen_general.setText(texto_resumen)
+        self.resumen_general.setPlainText(texto_resumen)
 
         self.boton_cancelar.hide()
-
         self.informes_scroll.show()
 
     def actualizar_progreso_general(self, mensaje, porcentaje):
@@ -315,24 +502,23 @@ class PaginaAnalisis(QWidget):
     def crear_informe_pagina(self, pagina):
 
         tarjeta = QFrame()
-        tarjeta.setObjectName("panel")
+        tarjeta.setObjectName("tarjeta_informe")
 
         layout_tarjeta = QVBoxLayout(tarjeta)
-        layout_tarjeta.setSpacing(10)
+        layout_tarjeta.setContentsMargins(20, 20, 20, 20)
+        layout_tarjeta.setSpacing(12)
 
         # Título de la página
-
         titulo = QLabel(
             pagina["titulo"] or pagina["url"]
         )
 
-        titulo.setObjectName("subtitulo")
+        titulo.setObjectName("titulo_tarjeta")
         titulo.setWordWrap(True)
 
         layout_tarjeta.addWidget(titulo)
 
         # URL
-
         url = QLabel(pagina["url"])
         url.setObjectName("descripcion")
         url.setWordWrap(True)
@@ -340,7 +526,6 @@ class PaginaAnalisis(QWidget):
         layout_tarjeta.addWidget(url)
 
         # Puntaje
-
         valor_puntaje = pagina.get("puntaje")
 
         if valor_puntaje is not None:
@@ -355,11 +540,11 @@ class PaginaAnalisis(QWidget):
             texto_puntaje = "Puntaje: No disponible"
 
         puntaje = QLabel(texto_puntaje)
+        puntaje.setObjectName("puntaje")
 
         layout_tarjeta.addWidget(puntaje)
 
         # Resumen de accesibilidad
-
         resumen = pagina["resumen"]
 
         texto_resumen = QLabel(
@@ -372,7 +557,6 @@ class PaginaAnalisis(QWidget):
         layout_tarjeta.addWidget(texto_resumen)
 
         # Problemas detectados
-
         problemas = pagina.get("problemas", [])
 
         orden_severidad = {
@@ -405,6 +589,7 @@ class PaginaAnalisis(QWidget):
             for problema in problemas:
 
                 separador = QFrame()
+                separador.setObjectName("separador")
                 separador.setFrameShape(QFrame.Shape.HLine)
 
                 layout_tarjeta.addWidget(separador)
@@ -418,7 +603,6 @@ class PaginaAnalisis(QWidget):
                 layout_tarjeta.addWidget(regla)
 
                 # Indicador de severidad
-
                 impacto = problema.get(
                     "impacto",
                     "unknown"
@@ -433,7 +617,7 @@ class PaginaAnalisis(QWidget):
 
                 nombre, color = severidades.get(
                     impacto,
-                    ("NO ESPECIFICADO", "#9CA3AF")
+                    ("NO ESPECIFICADO", "#94A3B8")
                 )
 
                 etiqueta_severidad = QLabel(nombre)
@@ -442,7 +626,8 @@ class PaginaAnalisis(QWidget):
                     f"""
                     QLabel {{
                         background-color: {color};
-                        color: #171521;
+                        color: #0B0F14;
+                        font-size: 12px;
                         font-weight: bold;
                         padding: 5px 10px;
                         border-radius: 6px;
@@ -458,6 +643,10 @@ class PaginaAnalisis(QWidget):
                     problema["descripcion"]
                 )
 
+                descripcion.setTextFormat(
+                    Qt.TextFormat.PlainText
+                )
+                descripcion.setObjectName("texto_problema")
                 descripcion.setWordWrap(True)
 
                 layout_tarjeta.addWidget(descripcion)
@@ -471,6 +660,10 @@ class PaginaAnalisis(QWidget):
                         + recomendacion.get("explicacion", "")
                     )
 
+                    explicacion.setTextFormat(
+                        Qt.TextFormat.PlainText
+                    )
+                    explicacion.setObjectName("texto_recomendacion")
                     explicacion.setWordWrap(True)
 
                     layout_tarjeta.addWidget(explicacion)
@@ -480,6 +673,10 @@ class PaginaAnalisis(QWidget):
                         + recomendacion.get("impacto_usuarios", "")
                     )
 
+                    impacto_usuarios.setTextFormat(
+                        Qt.TextFormat.PlainText
+                    )
+                    impacto_usuarios.setObjectName("texto_recomendacion")
                     impacto_usuarios.setWordWrap(True)
 
                     layout_tarjeta.addWidget(impacto_usuarios)
@@ -489,6 +686,10 @@ class PaginaAnalisis(QWidget):
                         + recomendacion.get("recomendacion", "")
                     )
 
+                    consejo.setTextFormat(
+                        Qt.TextFormat.PlainText
+                    )
+                    consejo.setObjectName("texto_recomendacion")
                     consejo.setWordWrap(True)
 
                     layout_tarjeta.addWidget(consejo)
@@ -500,6 +701,7 @@ class PaginaAnalisis(QWidget):
                         etiqueta_codigo = QLabel(
                             "Código sugerido:"
                         )
+                        etiqueta_codigo.setObjectName("subtitulo")
 
                         layout_tarjeta.addWidget(etiqueta_codigo)
 

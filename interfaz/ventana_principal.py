@@ -62,11 +62,10 @@ class VentanaPrincipal(QMainWindow):
 
         layout_lateral.addSpacing(25)
 
+        # Botones del menú
         self.boton_inicio = QPushButton("⌂   Inicio")
         self.boton_analisis = QPushButton("◎   Análisis")
-        self.boton_informes = QPushButton("▤   Informes")
         self.boton_historial = QPushButton("◷   Historial")
-        self.boton_configuracion = QPushButton("⚙   Configuración")
 
         self.boton_inicio.clicked.connect(self.mostrar_inicio)
 
@@ -74,29 +73,21 @@ class VentanaPrincipal(QMainWindow):
             lambda: self.mostrar_pagina_temporal("Análisis")
         )
 
-        self.boton_informes.clicked.connect(
-            lambda: self.mostrar_pagina_temporal("Informes")
-        )
-
         self.boton_historial.clicked.connect(
             lambda: self.mostrar_pagina_temporal("Historial")
-        )
-
-        self.boton_configuracion.clicked.connect(
-            lambda: self.mostrar_pagina_temporal("Configuración")
         )
 
         self.botones = [
             self.boton_inicio,
             self.boton_analisis,
-            self.boton_informes,
-            self.boton_historial,
-            self.boton_configuracion
+            self.boton_historial
         ]
 
         for boton in self.botones:
             boton.setObjectName("boton_menu")
+            boton.setCheckable(True)
             boton.setCursor(Qt.CursorShape.PointingHandCursor)
+            boton.setMinimumHeight(44)
             layout_lateral.addWidget(boton)
 
         layout_lateral.addStretch()
@@ -114,6 +105,11 @@ class VentanaPrincipal(QMainWindow):
 
         self.mostrar_inicio()
 
+    def actualizar_menu_activo(self, boton_activo):
+
+        for boton in self.botones:
+            boton.setChecked(boton == boton_activo)
+
     def mostrar_inicio(self):
 
         if "inicio" not in self.paginas:
@@ -130,10 +126,14 @@ class VentanaPrincipal(QMainWindow):
             self.paginas["inicio"]
         )
 
+        self.actualizar_menu_activo(self.boton_inicio)
+
     def mostrar_pagina_temporal(self, nombre):
 
         # Mostrar análisis actual si existe
         if nombre == "Análisis":
+
+            self.actualizar_menu_activo(self.boton_analisis)
 
             if "analisis_actual" in self.paginas:
                 self.contenido.setCurrentWidget(
@@ -173,6 +173,8 @@ class VentanaPrincipal(QMainWindow):
         # Mostrar historial real
         if nombre == "Historial":
 
+            self.actualizar_menu_activo(self.boton_historial)
+
             if "historial" not in self.paginas:
                 pagina = PaginaHistorial()
 
@@ -191,34 +193,9 @@ class VentanaPrincipal(QMainWindow):
             )
             return
 
-        # Otras secciones todavía en desarrollo
-        if nombre not in self.paginas:
-
-            pagina = QWidget()
-            layout = QVBoxLayout(pagina)
-
-            layout.setContentsMargins(45, 40, 45, 40)
-
-            titulo = QLabel(nombre)
-            titulo.setObjectName("titulo_pagina")
-
-            descripcion = QLabel(
-                "Esta sección se encuentra en desarrollo."
-            )
-            descripcion.setObjectName("descripcion")
-
-            layout.addWidget(titulo)
-            layout.addWidget(descripcion)
-            layout.addStretch()
-
-            self.paginas[nombre] = pagina
-            self.contenido.addWidget(pagina)
-
-        self.contenido.setCurrentWidget(
-            self.paginas[nombre]
-        )
-
     def iniciar_analisis(self, urls):
+
+        self.actualizar_menu_activo(self.boton_analisis)
 
         pagina = PaginaAnalisis(urls)
 
@@ -267,6 +244,8 @@ class VentanaPrincipal(QMainWindow):
         )
 
     def abrir_informe_historico(self, analisis_id):
+
+        self.actualizar_menu_activo(self.boton_historial)
 
         try:
             repositorio = RepositorioAnalisis()
@@ -437,57 +416,91 @@ class VentanaPrincipal(QMainWindow):
 
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #171521;
+                background-color: #0B0F14;
+            }
+
+            QWidget {
+                color: #E2E8F0;
             }
 
             #barra_lateral {
-                background-color: #11101A;
+                background-color: #080C12;
+                border-right: 1px solid #1C2936;
             }
 
             #titulo_app {
-                color: #D9CCFF;
+                color: #E2E8F0;
                 font-size: 23px;
                 font-weight: bold;
             }
 
             #subtitulo {
-                color: #85818F;
+                color: #94A3B8;
                 font-size: 10px;
                 letter-spacing: 2px;
             }
 
             #boton_menu {
                 background-color: transparent;
-                color: #B8B4C5;
+                color: #94A3B8;
                 border: none;
-                border-radius: 8px;
+                border-radius: 9px;
                 text-align: left;
                 padding: 13px;
                 font-size: 14px;
             }
 
             #boton_menu:hover {
-                background-color: #211E30;
-                color: #D9CCFF;
+                background-color: #1C2936;
+                color: #E2E8F0;
+            }
+
+            #boton_menu:checked {
+                background-color: #1C2936;
+                color: #E2E8F0;
+                border-left: 3px solid #6D91A8;
+                font-weight: bold;
             }
 
             #contenido {
-                background-color: #171521;
+                background-color: #0B0F14;
             }
 
             #titulo_pagina {
-                color: #D9CCFF;
+                color: #E2E8F0;
                 font-size: 30px;
                 font-weight: bold;
             }
 
             #descripcion {
-                color: #A5A1B2;
+                color: #94A3B8;
                 font-size: 14px;
             }
 
             #version {
-                color: #666273;
+                color: #64748B;
                 font-size: 11px;
+            }
+
+            QMessageBox {
+                background-color: #141B24;
+                color: #E2E8F0;
+            }
+
+            QMessageBox QLabel {
+                color: #E2E8F0;
+            }
+
+            QMessageBox QPushButton {
+                background-color: #263B4B;
+                color: #E2E8F0;
+                border: 1px solid #40596B;
+                border-radius: 6px;
+                padding: 7px 16px;
+                min-width: 70px;
+            }
+
+            QMessageBox QPushButton:hover {
+                background-color: #344F62;
             }
         """)
