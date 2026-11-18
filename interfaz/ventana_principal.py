@@ -10,13 +10,13 @@ from PySide6.QtWidgets import (
     QMessageBox
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
 
 from interfaz.paginas.inicio import PaginaInicio
 from interfaz.paginas.analisis import PaginaAnalisis
 from interfaz.trabajador_analisis import TrabajadorAnalisis
 from interfaz.paginas.historial import PaginaHistorial
 from bdd.repositorios import RepositorioAnalisis
+
 
 class VentanaPrincipal(QMainWindow):
 
@@ -26,7 +26,11 @@ class VentanaPrincipal(QMainWindow):
         self.setWindowTitle("AccessLens")
         self.setMinimumSize(1100, 700)
         self.resize(1200, 750)
+
         self.paginas = {}
+        self.trabajador = None
+        self.cierre_pendiente = False
+
         self.crear_interfaz()
         self.aplicar_estilos()
 
@@ -63,7 +67,7 @@ class VentanaPrincipal(QMainWindow):
         self.boton_informes = QPushButton("▤   Informes")
         self.boton_historial = QPushButton("◷   Historial")
         self.boton_configuracion = QPushButton("⚙   Configuración")
-        
+
         self.boton_inicio.clicked.connect(self.mostrar_inicio)
 
         self.boton_analisis.clicked.connect(
@@ -114,6 +118,7 @@ class VentanaPrincipal(QMainWindow):
 
         if "inicio" not in self.paginas:
             pagina = PaginaInicio()
+
             pagina.analizar_solicitado.connect(
                 self.iniciar_analisis
             )
@@ -124,9 +129,7 @@ class VentanaPrincipal(QMainWindow):
         self.contenido.setCurrentWidget(
             self.paginas["inicio"]
         )
-        
-    
-    
+
     def mostrar_pagina_temporal(self, nombre):
 
         # Mostrar análisis actual si existe
@@ -215,9 +218,6 @@ class VentanaPrincipal(QMainWindow):
             self.paginas[nombre]
         )
 
-
-        
-    
     def iniciar_analisis(self, urls):
 
         pagina = PaginaAnalisis(urls)
@@ -228,6 +228,12 @@ class VentanaPrincipal(QMainWindow):
 
         self.trabajador = TrabajadorAnalisis(urls)
 
+        # Conectar solicitud de cancelación
+        pagina.cancelar_solicitado.connect(
+            self.trabajador.cancelar
+        )
+
+        # Conectar señales del trabajador
         self.trabajador.progreso_actualizado.connect(
             pagina.actualizar_estado
         )
@@ -239,20 +245,18 @@ class VentanaPrincipal(QMainWindow):
         self.trabajador.error_ocurrido.connect(
             self.error_analisis
         )
-        
+
         self.trabajador.progreso_etapa.connect(
             pagina.actualizar_progreso_general
         )
 
         self.trabajador.start()
 
-        
     def finalizar_analisis(self, resultados):
 
         pagina = self.paginas["analisis_actual"]
 
         pagina.mostrar_resultados(resultados)
-
 
     def error_analisis(self, mensaje):
 
@@ -261,8 +265,7 @@ class VentanaPrincipal(QMainWindow):
         pagina.estado.setText(
             f"Error durante el análisis: {mensaje}"
         )
-        
-    
+
     def abrir_informe_historico(self, analisis_id):
 
         try:
@@ -387,6 +390,48 @@ class VentanaPrincipal(QMainWindow):
                 f"No se pudo abrir el informe histórico:\n{error}"
             )
 
+    def closeEvent(self, event):
+
+        trabajador = self.trabajador
+
+        # Si hay un análisis ejecutándose
+        if trabajador is not None and trabajador.isRunning():
+
+            # Evitar procesar varias solicitudes de cierre
+            if self.cierre_pendiente:
+                event.ignore()
+                return
+
+            respuesta = QMessageBox.question(
+                self,
+                "Análisis en curso",
+                "Hay un análisis en curso.\n\n"
+                "¿Querés cancelarlo y cerrar la aplicación?\n\n"
+                "AccessLens esperará a que terminen "
+                "las tareas que ya están ejecutándose.",
+                QMessageBox.StandardButton.Yes
+                | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+
+            if respuesta == QMessageBox.StandardButton.Yes:
+
+                self.cierre_pendiente = True
+
+                # Deshabilitar la ventana mientras termina
+                self.setEnabled(False)
+
+                # Cerrar automáticamente cuando termine el hilo
+                trabajador.finished.connect(self.close)
+
+                # Solicitar cancelación
+                trabajador.cancelar()
+
+            event.ignore()
+            return
+
+        # Si no hay ningún análisis activo, cerrar normalmente
+        event.accept()
 
     def aplicar_estilos(self):
 

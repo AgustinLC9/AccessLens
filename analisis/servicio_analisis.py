@@ -13,7 +13,8 @@ class ServicioAnalisis:
     def __init__(
         self,
         callback_progreso=None,
-        callback_etapa=None
+        callback_etapa=None,
+        evento_cancelacion=None
     ):
 
         self.repositorio = RepositorioAnalisis()
@@ -22,10 +23,18 @@ class ServicioAnalisis:
 
         self.callback_progreso = callback_progreso
         self.callback_etapa = callback_etapa
+        self.evento_cancelacion = evento_cancelacion
 
         self.paginas_finalizadas = 0
         self.total_paginas = 0
         self.bloqueo_progreso = Lock()
+
+    def esta_cancelado(self):
+
+        return (
+            self.evento_cancelacion is not None
+            and self.evento_cancelacion.is_set()
+        )
 
     def notificar(self, url, estado):
 
@@ -35,6 +44,7 @@ class ServicioAnalisis:
         if estado in ("completado", "fallido"):
 
             with self.bloqueo_progreso:
+
                 self.paginas_finalizadas += 1
 
                 porcentaje = int(
@@ -61,9 +71,13 @@ class ServicioAnalisis:
             self.total_paginas = len(urls)
             self.paginas_finalizadas = 0
 
-            self.informar_etapa("Analizando páginas", 0)
+            self.informar_etapa(
+                "Analizando páginas",
+                0
+            )
 
             # 1. Crear análisis en SQLite
+
             analisis_id = self.repositorio.crear_analisis(urls)
 
             self.repositorio.iniciar_analisis(analisis_id)
@@ -76,9 +90,11 @@ class ServicioAnalisis:
             }
 
             # 2. Ejecutar análisis concurrente
+
             gestor = GestorConcurrente(
                 max_trabajadores=3,
-                callback=self.notificar
+                callback=self.notificar,
+                evento_cancelacion=self.evento_cancelacion
             )
 
             resultados = gestor.analizar_urls(urls)
@@ -87,6 +103,7 @@ class ServicioAnalisis:
             total_recomendaciones = 0
 
             # 3. Procesar y guardar resultados
+
             self.informar_etapa(
                 "Procesando resultados y guardando en SQLite",
                 60
@@ -100,6 +117,7 @@ class ServicioAnalisis:
                 if resultado["estado"] == "completado":
 
                     datos = resultado["resultado"]
+
                     resultados_axe = datos["resultados_axe"]
 
                     problemas = self.procesador.procesar_problemas(
@@ -119,7 +137,6 @@ class ServicioAnalisis:
                     puntaje = puntaje_resultado["puntaje"]
                     clasificacion = puntaje_resultado["clasificacion"]
 
-                    # Guardar página
                     self.repositorio.guardar_pagina(
                         pagina_id=pagina_id,
                         titulo=datos["titulo"],
@@ -129,7 +146,6 @@ class ServicioAnalisis:
                         duracion_ms=resultado["duracion_ms"]
                     )
 
-                    # Guardar problemas
                     self.repositorio.guardar_problemas(
                         pagina_id,
                         problemas
@@ -154,9 +170,8 @@ class ServicioAnalisis:
                         "problemas_resultados": []
                     })
 
-                else:
+                elif resultado["estado"] == "fallido":
 
-                    # Guardar página fallida
                     self.repositorio.guardar_pagina(
                         pagina_id=pagina_id,
                         estado="fallido",
@@ -171,6 +186,22 @@ class ServicioAnalisis:
                         "error": resultado["error"]
                     })
 
+                else:
+
+                    self.repositorio.guardar_pagina(
+                        pagina_id=pagina_id,
+                        estado="cancelado",
+                        error="Análisis cancelado por el usuario",
+                        duracion_ms=resultado["duracion_ms"]
+                    )
+
+                    registros_paginas.append({
+                        "url": url,
+                        "estado": "cancelado",
+                        "duracion_ms": resultado["duracion_ms"],
+                        "error": "Análisis cancelado por el usuario"
+                    })
+
                 porcentaje = 60 + int(
                     ((indice + 1) / len(resultados)) * 15
                 )
@@ -181,129 +212,153 @@ class ServicioAnalisis:
                 )
 
             # 4. Generar recomendaciones con IA
-            self.informar_etapa(
-                "Generando recomendaciones con IA",
-                75
-            )
 
             recomendaciones_generadas = 0
             ia_disponible = True
 
-            if total_recomendaciones == 0:
+            if self.esta_cancelado():
+
                 self.informar_etapa(
-                    "No hay recomendaciones pendientes",
+                    "Cancelando análisis",
                     95
                 )
 
-            for registro in registros_paginas:
+            else:
 
-                if registro["estado"] == "fallido":
-                    continue
+                self.informar_etapa(
+                    "Generando recomendaciones con IA",
+                    75
+                )
 
-                problemas = registro["problemas"]
-                problemas_guardados = registro["problemas_guardados"]
+                if total_recomendaciones == 0:
 
-                for problema in problemas_guardados:
-
-                    problema_id = problema[0]
-                    regla_id = problema[2]
-                    impacto = problema[3]
-                    descripcion = problema[4]
-                    ayuda = problema[5]
-                    elementos = problema[6]
-
-                    problema_original = next(
-                        (
-                            p for p in registro["problemas"]
-                            if p["regla_id"] == regla_id
-                        ),
-                        {}
+                    self.informar_etapa(
+                        "No hay recomendaciones pendientes",
+                        95
                     )
 
-                    elemento_html = None
-                    elemento_selector = None
-                    resumen_fallo = None
+                for registro in registros_paginas:
 
-                    if elementos:
-                        elemento_html = elementos[0].get(
-                            "html", ""
+                    if self.esta_cancelado():
+                        break
+
+                    if registro["estado"] != "completado":
+                        continue
+
+                    problemas_guardados = registro["problemas_guardados"]
+
+                    for problema in problemas_guardados:
+
+                        if self.esta_cancelado():
+                            break
+
+                        problema_id = problema[0]
+                        regla_id = problema[2]
+                        impacto = problema[3]
+                        descripcion = problema[4]
+                        ayuda = problema[5]
+                        elementos = problema[6]
+
+                        problema_original = next(
+                            (
+                                p for p in registro["problemas"]
+                                if p["regla_id"] == regla_id
+                            ),
+                            {}
                         )
 
-                        elemento_selector = elementos[0].get(
-                            "selector", []
-                        )
+                        elemento_html = None
+                        elemento_selector = None
+                        resumen_fallo = None
 
-                        resumen_fallo = elementos[0].get(
-                            "resumen", ""
-                        )
+                        if elementos:
 
-                    recomendacion = None
+                            elemento_html = elementos[0].get(
+                                "html",
+                                ""
+                            )
 
-                    if ia_disponible:
+                            elemento_selector = elementos[0].get(
+                                "selector",
+                                []
+                            )
 
-                        try:
+                            resumen_fallo = elementos[0].get(
+                                "resumen",
+                                ""
+                            )
 
-                            recomendacion = (
-                                self.asistente.analizar_problema(
-                                    regla_id=regla_id,
-                                    impacto=impacto,
-                                    descripcion=descripcion,
-                                    ayuda=ayuda,
-                                    elemento_html=elemento_html,
-                                    elemento_selector=elemento_selector,
-                                    resumen_fallo=resumen_fallo,
-                                    etiquetas_wcag=problema_original.get(
-                                        "etiquetas_wcag", []
-                                    ),
-                                    url_ayuda=problema_original.get(
-                                        "url_ayuda", ""
+                        recomendacion = None
+
+                        if ia_disponible:
+
+                            try:
+
+                                recomendacion = (
+                                    self.asistente.analizar_problema(
+                                        regla_id=regla_id,
+                                        impacto=impacto,
+                                        descripcion=descripcion,
+                                        ayuda=ayuda,
+                                        elemento_html=elemento_html,
+                                        elemento_selector=elemento_selector,
+                                        resumen_fallo=resumen_fallo,
+                                        etiquetas_wcag=problema_original.get(
+                                            "etiquetas_wcag",
+                                            []
+                                        ),
+                                        url_ayuda=problema_original.get(
+                                            "url_ayuda",
+                                            ""
+                                        )
                                     )
                                 )
+
+                                self.repositorio.guardar_recomendacion(
+                                    problema_id,
+                                    recomendacion
+                                )
+
+                            except Exception as error:
+
+                                ia_disponible = False
+
+                                print(
+                                    f"[IA] Ollama no disponible o falló: {error}"
+                                )
+
+                                print(
+                                    "[IA] Se omitirán las recomendaciones "
+                                    "restantes de este análisis."
+                                )
+
+                        registro["problemas_resultados"].append({
+                            "regla_id": regla_id,
+                            "impacto": impacto,
+                            "descripcion": descripcion,
+                            "ayuda": ayuda,
+                            "elementos": elementos,
+                            "recomendacion": recomendacion
+                        })
+
+                        recomendaciones_generadas += 1
+
+                        if total_recomendaciones > 0:
+
+                            porcentaje = 75 + int(
+                                (
+                                    recomendaciones_generadas
+                                    / total_recomendaciones
+                                ) * 20
                             )
 
-                            self.repositorio.guardar_recomendacion(
-                                problema_id,
-                                recomendacion
+                            self.informar_etapa(
+                                "Generando recomendaciones con IA",
+                                porcentaje
                             )
-
-                        except Exception as error:
-
-                            ia_disponible = False
-
-                            print(
-                                f"[IA] Ollama no disponible o falló: {error}"
-                            )
-                            print(
-                                "[IA] Se omitirán las recomendaciones restantes "
-                                "de este análisis."
-                            )
-
-                    registro["problemas_resultados"].append({
-                        "regla_id": regla_id,
-                        "impacto": impacto,
-                        "descripcion": descripcion,
-                        "ayuda": ayuda,
-                        "elementos": elementos,
-                        "recomendacion": recomendacion
-                    })
-
-                    recomendaciones_generadas += 1
-
-                    if total_recomendaciones > 0:
-
-                        porcentaje = 75 + int(
-                            (
-                                recomendaciones_generadas
-                                / total_recomendaciones
-                            ) * 20
-                        )
-
-                        self.informar_etapa(
-                            "Generando recomendaciones con IA",
-                            porcentaje
-                        )
 
             # 5. Preparar resultados finales
+
             resultados_completos = []
 
             for registro in registros_paginas:
@@ -313,6 +368,21 @@ class ServicioAnalisis:
                     resultados_completos.append({
                         "url": registro["url"],
                         "estado": "fallido",
+                        "titulo": None,
+                        "url_final": None,
+                        "duracion_ms": registro["duracion_ms"],
+                        "puntaje": None,
+                        "clasificacion": None,
+                        "resumen": None,
+                        "problemas": [],
+                        "error": registro["error"]
+                    })
+
+                elif registro["estado"] == "cancelado":
+
+                    resultados_completos.append({
+                        "url": registro["url"],
+                        "estado": "cancelado",
                         "titulo": None,
                         "url_final": None,
                         "duracion_ms": registro["duracion_ms"],
@@ -341,32 +411,76 @@ class ServicioAnalisis:
                     })
 
             # 6. Finalizar análisis
-            resumen_final = self.repositorio.finalizar_analisis(
-                analisis_id
-            )
 
-            self.informar_etapa(
-                "Análisis finalizado",
-                100
-            )
+            if self.esta_cancelado():
 
-            # 7. Devolver resultados completos
+                self.repositorio.marcar_analisis_cancelado(
+                    analisis_id
+                )
+
+                estado_final = "cancelado"
+
+                self.informar_etapa(
+                    "Análisis cancelado",
+                    100
+                )
+
+            else:
+
+                resumen_final = self.repositorio.finalizar_analisis(
+                    analisis_id
+                )
+
+                estado_final = resumen_final["estado"]
+
+                self.informar_etapa(
+                    "Análisis finalizado",
+                    100
+                )
+
             return {
                 "analisis_id": analisis_id,
-                "resumen_general": resumen_final,
+                "estado": estado_final,
+                "resumen_general": (
+                    resumen_final
+                    if not self.esta_cancelado()
+                    else {
+                        "estado": "cancelado",
+                        "total_paginas": len(urls),
+                        "paginas_completadas": sum(
+                            1 for r in registros_paginas
+                            if r["estado"] == "completado"
+                        ),
+                        "paginas_fallidas": sum(
+                            1 for r in registros_paginas
+                            if r["estado"] == "fallido"
+                        )
+                    }
+                ),
                 "paginas": resultados_completos
             }
 
         except Exception as error:
 
             if analisis_id is not None:
+
                 try:
-                    self.repositorio.marcar_analisis_fallido(
-                        analisis_id,
-                        str(error)
-                    )
+
+                    if self.esta_cancelado():
+
+                        self.repositorio.marcar_analisis_cancelado(
+                            analisis_id
+                        )
+
+                    else:
+
+                        self.repositorio.marcar_analisis_fallido(
+                            analisis_id,
+                            str(error)
+                        )
 
                 except Exception as error_cierre:
+
                     print(
                         f"[ERROR] No se pudo cerrar el análisis: "
                         f"{error_cierre}"

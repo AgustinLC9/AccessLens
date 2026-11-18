@@ -1,22 +1,61 @@
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Event
 import time
 import traceback
+
 from analisis.navegador import Navegador
 
 
 class GestorConcurrente:
 
-    def __init__(self, max_trabajadores=3, callback=None):
+    def __init__(
+        self,
+        max_trabajadores=3,
+        callback=None,
+        evento_cancelacion=None
+    ):
         self.max_trabajadores = max_trabajadores
         self.callback = callback
+        self.evento_cancelacion = (
+            evento_cancelacion or Event()
+        )
+
+    def cancelar(self):
+        self.evento_cancelacion.set()
+
+    def esta_cancelado(self):
+        return self.evento_cancelacion.is_set()
+
+    def notificar_estado(self, url, estado):
+
+        if self.callback:
+            try:
+                self.callback(url, estado)
+
+            except Exception as error:
+                print(
+                    f"[ADVERTENCIA] Error al notificar "
+                    f"el estado de {url}: {error}",
+                    flush=True
+                )
 
     def analizar_pagina(self, url):
 
+        if self.esta_cancelado():
+            self.notificar_estado(url, "cancelado")
+
+            return {
+                "url": url,
+                "estado": "cancelado",
+                "resultado": None,
+                "duracion_ms": 0,
+                "error": None
+            }
+
         print(f"[INICIO] Comenzando análisis: {url}", flush=True)
 
-        if self.callback:
-            self.callback(url, "analizando")
+        self.notificar_estado(url, "analizando")
 
         inicio = time.perf_counter()
 
@@ -30,8 +69,7 @@ class GestorConcurrente:
 
             print(f"[FINALIZADO] {url}", flush=True)
 
-            if self.callback:
-                self.callback(url, "completado")
+            self.notificar_estado(url, "completado")
 
             return {
                 "url": url,
@@ -51,8 +89,7 @@ class GestorConcurrente:
                 (time.perf_counter() - inicio) * 1000
             )
 
-            if self.callback:
-                self.callback(url, "fallido")
+            self.notificar_estado(url, "fallido")
 
             return {
                 "url": url,
