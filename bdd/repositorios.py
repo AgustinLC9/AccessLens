@@ -197,6 +197,84 @@ class RepositorioAnalisis:
 
         finally:
             conexion.close()
+            
+        
+    # ----------------------------------
+    # MARCAR ANALISIS INTERRUMPIDO
+    # ----------------------------------
+
+    def marcar_analisis_fallido(self, analisis_id, error):
+        conexion = self.bd.conectar()
+
+        try:
+            with conexion:
+                cursor = conexion.cursor()
+
+                cursor.execute("""
+                    UPDATE paginas
+                    SET estado = 'fallido',
+                        error = ?
+                    WHERE analisis_id = ?
+                      AND estado = 'pendiente'
+                """, (
+                    f"Análisis interrumpido: {error}",
+                    analisis_id
+                ))
+
+                cursor.execute("""
+                    SELECT
+                        COUNT(*),
+                        SUM(CASE WHEN estado = 'completado' THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN estado = 'fallido' THEN 1 ELSE 0 END)
+                    FROM paginas
+                    WHERE analisis_id = ?
+                """, (analisis_id,))
+
+                total, completadas, fallidas = cursor.fetchone()
+
+                completadas = completadas or 0
+                fallidas = fallidas or 0
+
+                cursor.execute("""
+                    SELECT AVG(puntaje)
+                    FROM paginas
+                    WHERE analisis_id = ?
+                      AND estado = 'completado'
+                      AND puntaje IS NOT NULL
+                """, (analisis_id,))
+
+                puntaje_general = cursor.fetchone()[0]
+
+                fecha_fin = datetime.now().astimezone().isoformat(
+                    timespec="seconds"
+                )
+
+                cursor.execute("""
+                    UPDATE analisis
+                    SET estado = 'fallido',
+                        fecha_fin = ?,
+                        total_paginas = ?,
+                        paginas_completadas = ?,
+                        paginas_fallidas = ?,
+                        puntaje_general = ?
+                    WHERE id = ?
+                """, (
+                    fecha_fin,
+                    total,
+                    completadas,
+                    fallidas,
+                    round(puntaje_general) if puntaje_general is not None else None,
+                    analisis_id
+                ))
+
+                if cursor.rowcount == 0:
+                    raise ValueError(
+                        f"No existe el análisis con ID {analisis_id}"
+                    )
+
+        finally:
+            conexion.close()
+
 
     # ----------------------------------
     # LISTAR ANALISIS
