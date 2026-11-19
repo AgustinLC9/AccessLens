@@ -1,4 +1,5 @@
 
+import sys
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -7,13 +8,20 @@ from playwright.sync_api import sync_playwright
 class Navegador:
 
     def __init__(self):
+
+        if getattr(sys, "frozen", False):
+            carpeta_base = Path(sys._MEIPASS)
+        else:
+            carpeta_base = Path(__file__).resolve().parent.parent
+
         self.ruta_axe = (
-            Path(__file__).resolve().parent.parent
+            carpeta_base
             / "recursos"
             / "axe.min.js"
         )
 
     def obtener_datos(self, url):
+
         with sync_playwright() as playwright:
 
             navegador = playwright.chromium.launch(
@@ -42,7 +50,6 @@ class Navegador:
                     else None
                 )
 
-                # Cargar axe-core en la página
                 codigo_axe = self.ruta_axe.read_text(
                     encoding="utf-8"
                 )
@@ -50,8 +57,7 @@ class Navegador:
                 pagina.add_script_tag(
                     content=codigo_axe
                 )
-                
-                # Ejecutar análisis de accesibilidad
+
                 resultados_axe = pagina.evaluate("""
                     async () => {
                         return await axe.run(document);
@@ -68,3 +74,4 @@ class Navegador:
 
             finally:
                 navegador.close()
+
