@@ -1,5 +1,5 @@
 
-# Entorno virtual
+# Entornos virtuales
 venv/
 .venv/
 env/
@@ -9,10 +9,11 @@ __pycache__/
 *.py[cod]
 *.pyo
 
-# Base de datos
+# Bases de datos locales
 *.db
 *.sqlite
 *.sqlite3
+*.db-journal
 
 # Configuración local
 .env
@@ -22,6 +23,11 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Configuración de editores
+# Editores
 .vscode/
 .idea/
+
+# PyInstaller
+build/
+dist/
+*.spec
